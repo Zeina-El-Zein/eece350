@@ -133,7 +133,11 @@ class PithonClient:
 
         # Result
         self.result_data = {}
-
+        # Chat
+        self.chat_open    = False
+        self.chat_input   = ""
+        self.chat_log     = []    # list of (from, message)
+        self.chat_log_max = 6     # max messages shown on screen
     # ─────────────────────────────────────
     # Networking
     # ─────────────────────────────────────
@@ -224,6 +228,12 @@ class PithonClient:
 
         elif t == "ERROR":
             self.lobby_msg = msg.get("message", "Error")
+        elif t == "CHAT_MSG":
+            from_user = msg.get("from", "?")
+            message   = msg.get("message", "")
+            self.chat_log.append((from_user, message))
+            if len(self.chat_log) > self.chat_log_max:
+                self.chat_log.pop(0)
 
     # ─────────────────────────────────────
     # Main loop
@@ -413,6 +423,36 @@ class PithonClient:
     # ─────────────────────────────────────
 
     def _ev_lobby(self, ev):
+        # chat input open — intercept all keys
+        if self.chat_open:
+            if ev.type != pygame.KEYDOWN:
+                return
+            if ev.key == pygame.K_RETURN:
+                if self.chat_input.strip():
+                    self._send({
+                        "type": "CHAT",
+                        "message": self.chat_input.strip()
+                    })
+                    # show own message in log too
+                    self.chat_log.append((self.username, self.chat_input.strip()))
+                    if len(self.chat_log) > self.chat_log_max:
+                        self.chat_log.pop(0)
+                self.chat_input = ""
+                self.chat_open  = False
+            elif ev.key == pygame.K_ESCAPE:
+                self.chat_input = ""
+                self.chat_open  = False
+            elif ev.key == pygame.K_BACKSPACE:
+                self.chat_input = self.chat_input[:-1]
+            else:
+                if ev.unicode and ev.unicode.isprintable():
+                    self.chat_input += ev.unicode
+            return
+
+        # C to open chat
+        if ev.type == pygame.KEYDOWN and ev.key == pygame.K_c:
+            self.chat_open = True
+            return
         if ev.type != pygame.KEYDOWN:
             return
         others = self._other_players()
@@ -484,14 +524,43 @@ class PithonClient:
         if self.lobby_msg:
             self._text(self.lobby_msg, self.font_small, C_YELLOW,
                 cx, WIN_H - 30, center=True)
+        self._draw_chat()
 
     # ─────────────────────────────────────
     # Game screen
     # ─────────────────────────────────────
 
     def _ev_game(self, ev):
+        # allow chat during countdown
         if self.countdown_active:
+            if self.chat_open:
+                if ev.type != pygame.KEYDOWN:
+                    return
+                if ev.key == pygame.K_RETURN:
+                    if self.chat_input.strip():
+                        self._send({
+                            "type": "CHAT",
+                            "message": self.chat_input.strip()
+                        })
+                        self.chat_log.append((self.username, self.chat_input.strip()))
+                        if len(self.chat_log) > self.chat_log_max:
+                            self.chat_log.pop(0)
+                    self.chat_input = ""
+                    self.chat_open  = False
+                elif ev.key == pygame.K_ESCAPE:
+                    self.chat_input = ""
+                    self.chat_open  = False
+                elif ev.key == pygame.K_BACKSPACE:
+                    self.chat_input = self.chat_input[:-1]
+                else:
+                    if ev.unicode and ev.unicode.isprintable():
+                        self.chat_input += ev.unicode
+                return
+            if ev.type == pygame.KEYDOWN and ev.key == pygame.K_c:
+                self.chat_open = True
             return
+
+        # normal game input — no chat during game
         if ev.type != pygame.KEYDOWN:
             return
         if ev.key in self.key_map and self.my_player_id in (1, 2):
@@ -594,6 +663,9 @@ class PithonClient:
                 y += 20
 
             self._draw_side_panel(TOP)
+            
+            self._draw_chat()    # add this line before return
+                
             return
 
         if not gs:
@@ -678,6 +750,33 @@ class PithonClient:
                         TOP + by * CELL_SIZE + 5), 2)
 
         self._draw_side_panel(TOP)
+    def _draw_chat(self):
+        cx  = WIN_W // 2
+        box_w = 500
+        box_x = cx - box_w // 2
+
+        # chat log — show above input box
+        log_y = WIN_H - 180
+        for from_user, message in self.chat_log:
+            col  = C_GREEN if from_user == self.username else C_ACCENT
+            text = f"{from_user}: {message}"
+            # truncate if too long
+            if len(text) > 55:
+                text = text[:52] + "..."
+            self._text(text, self.font_tiny, col, box_x, log_y)
+            log_y += 18
+
+        # input box
+        if self.chat_open:
+            pygame.draw.rect(self.screen, (20, 25, 50),
+                (box_x, WIN_H - 60, box_w, 36), border_radius=6)
+            pygame.draw.rect(self.screen, C_ACCENT,
+                (box_x, WIN_H - 60, box_w, 36), 2, border_radius=6)
+            self._text(f"> {self.chat_input}|",
+                self.font_small, C_WHITE, box_x + 10, WIN_H - 50)
+        else:
+            self._text("C to chat",
+                self.font_tiny, C_GRAY, box_x, WIN_H - 50)
     def _draw_side_panel(self, top):
         sx = GRID_W * CELL_SIZE + 10
         pygame.draw.rect(self.screen, C_PANEL,
