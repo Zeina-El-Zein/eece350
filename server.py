@@ -142,7 +142,27 @@ def handle_input(username, msg):
     elif username == uname2:
         game_engine.handle_input(2, dx, dy)
 
+def handle_chat(sender_username, msg):
+    message = msg.get("message", "").strip()
+    if not message:
+        return
 
+    chat_msg = {
+        "type": "CHAT_MSG",
+        "from": sender_username,
+        "message": message
+    }
+
+    with state_lock:
+        recipients = list(connected_clients.keys())
+
+    for sock in recipients:
+        uname = connected_clients.get(sock)
+        if uname != sender_username:
+            try:
+                send_message(sock, chat_msg)
+            except Exception as e:
+                print(f"[CHAT ERROR] {e}")
 def handle_challenge(challenger_socket, challenger_name, msg):
     global game_in_progress, pending_challenges
 
@@ -233,7 +253,6 @@ def handle_disconnect_during_game(username):
 
     print(f"[FORFEIT] {username} disconnected during game")
 
-
 def handle_client(client_socket, client_address):
     print(f"[NEW CONNECTION] {client_address} connected.")
 
@@ -298,6 +317,9 @@ def handle_client(client_socket, client_address):
 
             elif msg_type == "INPUT":
                 handle_input(username, msg)
+
+            elif msg_type == "CHAT":
+                handle_chat(username, msg)
 
             else:
                 print(f"[RECEIVED FROM {username}] {msg}")
