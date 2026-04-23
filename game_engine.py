@@ -15,6 +15,16 @@ PIE_TYPES = {
     "rotten": -10,
 }
 
+#Box types: (creative feature)
+BOX_TYPES = {
+    "common":  50,    # health delta
+    "rare":    50,    # health delta + double damage
+    "cursed": -50,    # health delta
+}
+
+NUM_BOXES = 3
+DOUBLE_DAMAGE_DURATION = 30.0  # seconds
+
 # Obstacle types: (damage)
 OBSTACLE_TYPES = {
     "rock": -20,
@@ -31,7 +41,8 @@ class Snake:
         self.next_direction = start_direction
         self.health = INITIAL_HEALTH
         self.grow_pending = 0
-
+        self.double_damage       = False
+        self.double_damage_until = 0.0
     @property
     def head(self):
         return self.body[0]
@@ -60,6 +71,8 @@ class Snake:
             "body": self.body,
             "direction": list(self.direction),
             "health": self.health,
+            "double_damage": self.double_damage,
+            "double_damage_remaining": max(0, self.double_damage_until - time.time()) if self.double_damage else 0,
         }
 
 
@@ -79,6 +92,7 @@ class GameEngine:
         )
 
         self.pies = {}        # (x, y) -> type_id
+        self.boxes = {}
         self.obstacles = {}   # (x, y) -> type_id
 
         self.start_time = time.time()
@@ -86,9 +100,11 @@ class GameEngine:
         self.winner = None
         self.end_reason = ""
         self._tick_count = 0
-
+        self.notifications = []   # list of (username, message)
+        
         self._generate_obstacles()
         self._generate_pies()
+        self._generate_boxes()
 
     # ─────────────────────────────────────────
     # Generation
@@ -116,7 +132,12 @@ class GameEngine:
         while len(self.pies) < 8:
             cell = self._free_cell()
             self.pies[cell] = random.choice(list(PIE_TYPES.keys()))
-
+    def _generate_boxes(self):
+        while len(self.boxes) < NUM_BOXES:
+            cell = self._free_cell()
+            t = random.choice(list(BOX_TYPES.keys()))
+            self.boxes[cell] = {"type_id": t}
+            
     # ─────────────────────────────────────────
     # Input
     # ─────────────────────────────────────────
@@ -181,9 +202,20 @@ class GameEngine:
         if snake.head in snake.body[1:]:
             snake.health -= 15
 
-        # other snake body collision → instant death
+        # other snake body collision
         if snake.head in other.body:
-            snake.health = 0
+            now = time.time()
+            # check if other snake has expired double damage
+            if other.double_damage and now > other.double_damage_until:
+                other.double_damage = False
+
+            damage = 100 if other.double_damage else 50
+            snake.health -= damage
+            snake.health = max(0, snake.health)
+
+            if other.double_damage:
+                other.double_damage = False
+                self.notifications.append((snake.username, "Double damage hit!"))
 
         # pie collection
         if snake.head in self.pies:
@@ -192,6 +224,24 @@ class GameEngine:
             snake.health = max(0, min(200, snake.health + delta))
             snake.grow_pending += 1
 
+        # box collection
+        if snake.head in self.boxes:
+            box = self.boxes.pop(snake.head)
+            t   = box["type_id"]
+            delta = BOX_TYPES[t]
+            snake.health = max(0, min(200, snake.health + delta))
+
+            if t == "rare":
+                snake.double_damage       = True
+                snake.double_damage_until = time.time() + DOUBLE_DAMAGE_DURATION
+                # notify opponent
+                other.health = other.health   # no change, just trigger notification
+                self.notifications.append((
+                    other.username,
+                    f"{snake.username} has DOUBLE DAMAGE for 30s!"
+                ))
+            self._generate_boxes()
+            
         # clamp health
         snake.health = max(0, snake.health)
 
@@ -239,16 +289,28 @@ class GameEngine:
     # State snapshot
     # ─────────────────────────────────────────
 
-    def get_state(self):
-        elapsed = time.time() - self.start_time
+    def get_state(self) -> dict:
+        now     = time.time()
+        elapsed = now - self.start_time
+
+        # expire double damage
+        for snake in [self.snake1, self.snake2]:
+            if snake.double_damage and now > snake.double_damage_until:
+                snake.double_damage = False
+
+        notifs = list(self.notifications)
+        self.notifications.clear()
+
         return {
-            "tick": self._tick_count,
-            "time_left": max(0, GAME_DURATION - elapsed),
-            "snake1": self.snake1.to_dict(),
-            "snake2": self.snake2.to_dict(),
-            "pies": {f"{x},{y}": t for (x, y), t in self.pies.items()},
-            "obstacles": {f"{x},{y}": t for (x, y), t in self.obstacles.items()},
-            "game_over": self.game_over,
-            "winner": self.winner,
-            "end_reason": self.end_reason,
+            "tick":          self._tick_count,
+            "time_left":     max(0, GAME_DURATION - elapsed),
+            "snake1":        self.snake1.to_dict(),
+            "snake2":        self.snake2.to_dict(),
+            "pies":          {f"{k[0]},{k[1]}": v for k, v in self.pies.items()},
+            "obstacles":     {f"{k[0]},{k[1]}": v for k, v in self.obstacles.items()},
+            "boxes":         {f"{k[0]},{k[1]}": v for k, v in self.boxes.items()},
+            "notifications": notifs,
+            "game_over":     self.game_over,
+            "winner":        self.winner,
+            "end_reason":    self.end_reason,
         }
