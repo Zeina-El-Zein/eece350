@@ -11,19 +11,22 @@ active_usernames = set()
 connected_clients = {}
 player_states = {}
 state_lock = threading.Lock()
+player_colors = {}   # username -> [r, g, b]
 
 game_in_progress = False
 pending_challenges = {}
 players_in_game = []
 game_engine = None
-
+spectators = []
 
 def build_lobby_message():
     return {
         "type": "LOBBY",
-        "players": sorted(list(active_usernames))
+        "players": [
+            {"username": uname, "status": player_states.get(uname, "lobby")}
+            for uname in sorted(active_usernames)
+        ]
     }
-
 
 def broadcast_lobby():
     lobby = build_lobby_message()
@@ -43,7 +46,8 @@ def get_socket_by_username(username):
 
 def broadcast_game_state():
     state = game_engine.get_state()
-    for sock in players_in_game:
+    all_recipients = players_in_game + spectators
+    for sock in all_recipients:
         try:
             send_message(sock, {"type": "GAME_STATE", **state})
         except Exception as e:
@@ -51,7 +55,8 @@ def broadcast_game_state():
 
 
 def game_loop():
-    global game_in_progress, players_in_game, game_engine
+    
+    global game_in_progress, players_in_game, game_engine, spectators
 
     print("[GAME LOOP] Started")
 
@@ -78,7 +83,8 @@ def game_loop():
         }
     }
 
-    for sock in players_in_game:
+    all_recipients = players_in_game + spectators
+    for sock in all_recipients:
         try:
             send_message(sock, end_msg)
         except Exception as e:
@@ -92,12 +98,18 @@ def game_loop():
             uname = connected_clients.get(sock)
             if uname:
                 player_states[uname] = "lobby"
+        for sock in spectators:
+            uname = connected_clients.get(sock)
+            if uname:
+                player_states[uname] = "lobby"
         game_in_progress = False
         players_in_game  = []
+        spectators       = []
         game_engine      = None
 
     broadcast_lobby()
-
+    print("[GAME LOOP] Finished and reset")
+    
 def start_game(socket1, socket2, username1, username2):
     global game_in_progress, players_in_game, game_engine
 
@@ -108,18 +120,24 @@ def start_game(socket1, socket2, username1, username2):
         player_states[username2] = "in_game"
         game_engine = GameEngine(username1, username2)
 
+
     game_start_msg = {
         "type": "GAME_START",
         "player1": username1,
         "player2": username2,
-        "grid_w": 40,
-        "grid_h": 30,
-        "duration": 120
+        "color1":  player_colors.get(username1, [60, 200, 120]),
+        "color2":  player_colors.get(username2, [80, 140, 255]),
+        "grid_w":  40,
+        "grid_h":  30,
+        "duration": 120,
     }
     send_message(socket1, game_start_msg)
     send_message(socket2, game_start_msg)
 
     print(f"[GAME START] {username1} vs {username2}")
+
+    # broadcast updated lobby to everyone including spectators
+    broadcast_lobby()
 
     thread = threading.Thread(target=game_loop, daemon=True)
     thread.start()
@@ -163,12 +181,46 @@ def handle_chat(sender_username, msg):
                 send_message(sock, chat_msg)
             except Exception as e:
                 print(f"[CHAT ERROR] {e}")
-def handle_challenge(challenger_socket, challenger_name, msg):
-    global game_in_progress, pending_challenges
-
-    target_name = msg.get("target", "").strip()
+def handle_spectate(client_socket, username):
+    global spectators
 
     with state_lock:
+        if client_socket not in spectators:
+            spectators.append(client_socket)
+            player_states[username] = "spectating"
+
+    if game_engine and not game_engine.game_over:
+        send_message(client_socket, {
+            "type": "SPECTATE_OK",
+            "game_in_progress": True
+        })
+        send_message(client_socket, {
+            "type": "GAME_START",
+            "player1": game_engine.snake1.username,
+            "player2": game_engine.snake2.username,
+            "color1":  player_colors.get(game_engine.snake1.username, [60, 200, 120]),
+            "color2":  player_colors.get(game_engine.snake2.username, [80, 140, 255]),
+            "grid_w":  40,
+            "grid_h":  30,
+            "duration": 120,
+            "skip_countdown": True
+        })        
+        send_message(client_socket, {"type": "GAME_STATE", **game_engine.get_state()})
+        print(f"[SPECTATE] {username} joined as spectator")
+    else:
+        send_message(client_socket, {
+            "type": "SPECTATE_OK",
+            "game_in_progress": False
+        })
+        print(f"[SPECTATE] {username} tried to spectate but no game in progress")
+        
+def handle_challenge(challenger_socket, challenger_name, msg):
+    global game_in_progress, pending_challenges 
+    target_name = msg.get("target", "").strip()
+    color = msg.get("color", [60, 200, 120])
+    with state_lock:
+        player_colors[challenger_name] = color
+        
         if game_in_progress:
             send_message(challenger_socket, {
                 "type": "ERROR",
@@ -205,8 +257,10 @@ def handle_challenge_resp(responder_socket, responder_name, msg):
     global pending_challenges
 
     accepted = msg.get("accepted", False)
-
+    color = msg.get("color", [80, 140, 255])
     with state_lock:
+        player_colors[responder_name] = color
+        
         challenger_name = None
         for c, t in pending_challenges.items():
             if t == responder_name:
@@ -320,7 +374,11 @@ def handle_client(client_socket, client_address):
 
             elif msg_type == "CHAT":
                 handle_chat(username, msg)
-
+            elif msg_type == "SPECTATE":
+                handle_spectate(client_socket, username)
+            elif msg_type == "PLAYER_COLOR":
+                with state_lock:
+                    player_colors[username] = msg.get("color", [60, 200, 120])
             else:
                 print(f"[RECEIVED FROM {username}] {msg}")
 
@@ -336,6 +394,8 @@ def handle_client(client_socket, client_address):
             connected_clients.pop(client_socket, None)
             active_usernames.discard(username)
             player_states.pop(username, None)
+            if client_socket in spectators:
+                spectators.remove(client_socket)
 
         print(f"[DISCONNECTED] {username}")
         broadcast_lobby()
