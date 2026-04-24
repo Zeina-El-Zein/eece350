@@ -2,11 +2,11 @@ import random
 import time
 
 # Grid dimensions
-GRID_W = 40
-GRID_H = 30
+GRID_W = 48   
+GRID_H = 34   
 GAME_DURATION = 300  # seconds
 INITIAL_HEALTH = 200
-TICK_INTERVAL = 1 / 6  # 6 ticks per second
+TICK_INTERVAL = 1 / 4  # 4 ticks per second
 
 # Pie types: (health_delta)
 PIE_TYPES = {
@@ -81,13 +81,13 @@ class GameEngine:
         self.snake1 = Snake(
             player_id=1,
             username=username1,
-            start_body=[(5, 15), (4, 15), (3, 15)],
+            start_body=[(5, 17), (4, 17), (3, 17)],
             start_direction=(1, 0)
         )
         self.snake2 = Snake(
             player_id=2,
             username=username2,
-            start_body=[(35, 15), (36, 15), (37, 15)],
+            start_body=[(43, 17), (44, 17), (45, 17)],
             start_direction=(-1, 0)
         )
 
@@ -184,14 +184,9 @@ class GameEngine:
     def _check_snake_collisions(self, snake, other):
         hx, hy = snake.head
 
-        # wall collision
+        # wall wrapping — teleport to opposite side
         if hx < 0 or hx >= GRID_W or hy < 0 or hy >= GRID_H:
-            snake.health -= 20
-            # push head back inside grid
-            snake.body[0] = (
-                max(0, min(GRID_W - 1, hx)),
-                max(0, min(GRID_H - 1, hy))
-            )
+            snake.body[0] = (hx % GRID_W, hy % GRID_H)
 
         # obstacle collision
         if snake.head in self.obstacles:
