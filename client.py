@@ -14,8 +14,8 @@ SERVER_PORT = 5000
 # Constants
 # ─────────────────────────────────────────
 CELL_SIZE = 20
-GRID_W    = 40
-GRID_H    = 30
+GRID_W = 48   
+GRID_H = 34   
 PANEL_W   = 260
 WIN_W     = GRID_W * CELL_SIZE + PANEL_W
 WIN_H     = GRID_H * CELL_SIZE + 60
@@ -1142,7 +1142,6 @@ class PithonClient:
         right_items = [
             ("Rock    -20 HP",   (160, 160, 160)),
             ("Spike   -30 HP",   (220, 70, 70)),
-            ("Wall    -20 HP",   C_GRAY),
             ("Body    -15 HP",   C_GRAY),
             ("Opp.  -50 HP",     C_RED),
             ("Opp.  -100 w/Rare",C_PURPLE),
@@ -1353,7 +1352,6 @@ class PithonClient:
                 ("^ Spike   -30 HP",  (220, 100, 100)),
                 ("", C_GRAY),
                 ("COLLISIONS", (200, 200, 255)),
-                ("Wall      -20 HP",  C_GRAY),
                 ("Own body  -15 HP",  C_GRAY),
                 ("Opponent  -50 HP",       C_RED),
                 ("Opp. -100 w/Rare box",   C_PURPLE),
@@ -1541,74 +1539,95 @@ class PithonClient:
         text_col = C_WHITE if self.chat_input else C_GRAY
         self._text(f"{display}{cursor}", self.font_small, text_col,
             box_x + 10, input_y + 8)
+    
     def _draw_side_panel(self, top):
         W, H    = self.screen.get_size()
         sx      = GRID_W * CELL_SIZE + 10
         panel_w = W - GRID_W * CELL_SIZE
         panel_h = GRID_H * CELL_SIZE
 
-        # panel background
         pygame.draw.rect(self.screen, C_PANEL,
             (GRID_W * CELL_SIZE, top, panel_w, panel_h))
         pygame.draw.line(self.screen, C_ACCENT,
             (GRID_W * CELL_SIZE, top),
             (GRID_W * CELL_SIZE, top + panel_h), 2)
 
-        # ── Controls ──
-        self._text("CONTROLS", self.font_small, C_CYAN, sx, top + 10)
-        pygame.draw.line(self.screen, C_ACCENT,
-            (sx, top + 30), (W - 10, top + 30), 1)
+        # ── Two column layout ──
+        col1_x = sx
+        col2_x = sx + panel_w // 2
+        col_w  = panel_w // 2 - 10
 
-        hints = [
-            f"UP:    {self.key_names.get('UP',   '?')}",
-            f"DOWN:  {self.key_names.get('DOWN', '?')}",
-            f"LEFT:  {self.key_names.get('LEFT', '?')}",
-            f"RIGHT: {self.key_names.get('RIGHT','?')}",
+        # ── Left column — Controls + Pies ──
+        self._text("CONTROLS", self.font_small, C_CYAN, col1_x, top + 10)
+        pygame.draw.line(self.screen, C_ACCENT,
+            (col1_x, top + 28), (col1_x + col_w, top + 28), 1)
+
+        left_hints = [
+            f"UP:  {self.key_names.get('UP','?')}",
+            f"DN:  {self.key_names.get('DOWN','?')}",
+            f"LT:  {self.key_names.get('LEFT','?')}",
+            f"RT:  {self.key_names.get('RIGHT','?')}",
             "",
             "Pies:",
-            "  o Golden  +15 HP",
-            "  o Green    +8 HP",
-            "  x Rotten  -10 HP",
+            " o Golden +15HP",
+            " o Green   +8HP",
+            " x Rotten -10HP",
             "",
             "Boxes:",
-            "  + Common  +50 HP",
-            "  * Rare    +50 HP + 2x dmg",
-            "  x Cursed  -50 HP",
-            "",
+            " + Common +50HP",
+            " * Rare   +50HP",
+            "   +2x dmg 30s",
+            " x Cursed -50HP",
+        ]
+        y = top + 35
+        for hint in left_hints:
+            if hint.startswith("Pies"):         col = C_YELLOW
+            elif hint.startswith("Boxes"):      col = C_PURPLE
+            elif hint.startswith(" o Golden"):  col = (255, 220, 0)
+            elif hint.startswith(" o Green"):   col = (60, 230, 80)
+            elif hint.startswith(" x Rotten"):  col = (140, 90, 30)
+            elif hint.startswith(" + Common"):  col = (255, 215, 0)
+            elif hint.startswith(" * Rare"):    col = (180, 80, 220)
+            elif hint.startswith("   +2x"):     col = (180, 80, 220)
+            elif hint.startswith(" x Cursed"):  col = (139, 0, 0)
+            else:                               col = C_GRAY
+            self._text(hint, self.font_tiny, col, col1_x, y)
+            y += 15
+
+        # ── Right column — Obstacles + Collisions ──
+        self._text("HAZARDS", self.font_small, C_RED, col2_x, top + 10)
+        pygame.draw.line(self.screen, C_ACCENT,
+            (col2_x, top + 28), (col2_x + col_w, top + 28), 1)
+
+        right_hints = [
             "Obstacles:",
-            "  # Rock    -20 HP",
-            "  ^ Spike   -30 HP",
+            " # Rock  -20HP",
+            " ^ Spike -30HP",
             "",
             "Collisions:",
-            "  Wall      -20 HP",
-            "  Own body  -15 HP",
-            "  Opponent  -50 HP",
-            "  Opp -100 w/Rare box",
+            " Own body -15HP",
+            " Opp.     -50HP",
+            " Opp+Rare-100HP",
+            "",
+            "Walls wrap",
+            "around the grid",
         ]
-        
-        y = top + 40
-        for hint in hints:
-            if hint.startswith("Pies"):         col = C_YELLOW
-            elif hint.startswith("Obstacles"):  col = C_RED
+        y = top + 35
+        for hint in right_hints:
+            if hint.startswith("Obstacles"):    col = C_RED
             elif hint.startswith("Collisions"): col = C_ORANGE
-            elif hint.startswith("  o Golden"): col = (255, 220, 0)
-            elif hint.startswith("  o Green"):  col = (60, 230, 80)
-            elif hint.startswith("  x Rotten"): col = (140, 90, 30)
-            elif hint.startswith("  # Rock"):   col = (160, 160, 160)
-            elif hint.startswith("  ^ Spike"):  col = (220, 70, 70)
-            elif "instant kill" in hint:        col = C_RED
-            elif hint.startswith("Boxes"):           col = C_PURPLE
-            elif hint.startswith("  + Common"):      col = (255, 215, 0)
-            elif hint.startswith("  * Rare"):        col = (180, 80, 220)
-            elif hint.startswith("  x Cursed"):      col = (139, 0, 0)
-            elif "Opp -100" in hint: col = C_PURPLE
+            elif hint.startswith(" # Rock"):    col = (160, 160, 160)
+            elif hint.startswith(" ^ Spike"):   col = (220, 70, 70)
+            elif "Rare" in hint:                col = C_PURPLE
+            elif hint.startswith("Walls"):      col = C_CYAN
+            elif hint.startswith("around"):     col = C_CYAN
             else:                               col = C_GRAY
-            self._text(hint, self.font_tiny, col, sx, y)
-            y += 16
+            self._text(hint, self.font_tiny, col, col2_x, y)
+            y += 15
 
         # ── Health bars ──
         if self.game_state:
-            health_y = top + 340
+            health_y = top + panel_h - 260
             pygame.draw.line(self.screen, C_ACCENT,
                 (sx, health_y - 8), (W - 10, health_y - 8), 1)
             self._text("HEALTH", self.font_small, C_ACCENT, sx, health_y)
@@ -1618,49 +1637,47 @@ class PithonClient:
                 uname = sdata.get("username", f"P{pid}")
                 col   = self.player1_color if pid == 1 else self.player2_color
                 label = f"{uname} (you)" if pid == self.my_player_id else uname
-                health_y += 25
+                health_y += 22
                 self._text(label, self.font_tiny, col, sx, health_y)
-                health_y += 16
+                health_y += 14
                 pygame.draw.rect(self.screen, (40, 40, 60),
-                    (sx, health_y, panel_w - 20, 12), border_radius=4)
+                    (sx, health_y, panel_w - 20, 10), border_radius=4)
                 bar_col = col if hp > 30 else C_RED
                 pygame.draw.rect(self.screen, bar_col,
-                    (sx, health_y, int((panel_w - 20) * hp / 100), 12), border_radius=4)
+                    (sx, health_y, int((panel_w - 20) * hp / 100), 10), border_radius=4)
                 self._text(f"{hp}", self.font_tiny, col, sx + panel_w - 18, health_y)
-                health_y += 20
+                health_y += 16
 
         # ── Chat box ──
-        chat_top = top + panel_h - 200
+        chat_top = top + panel_h - 155
         pygame.draw.line(self.screen, C_ACCENT,
-            (sx, chat_top - 8), (W - 10, chat_top - 8), 1)
+            (sx, chat_top - 6), (W - 10, chat_top - 6), 1)
         self._text("CHAT", self.font_small, C_ACCENT, sx, chat_top)
         pygame.draw.rect(self.screen, (12, 15, 28),
-            (sx, chat_top + 22, panel_w - 10, 130), border_radius=6)
+            (sx, chat_top + 20, panel_w - 10, 90), border_radius=6)
         pygame.draw.rect(self.screen, C_ACCENT,
-            (sx, chat_top + 22, panel_w - 10, 130), 1, border_radius=6)
+            (sx, chat_top + 20, panel_w - 10, 90), 1, border_radius=6)
 
-        # messages
-        log_y = chat_top + 30
-        for from_user, message in self.chat_log[-5:]:
+        log_y = chat_top + 28
+        for from_user, message in self.chat_log[-4:]:
             col  = C_GREEN if from_user == self.username else C_ACCENT
             text = f"{from_user}: {message}"
             if len(text) > 30:
                 text = text[:27] + "..."
-            if log_y < chat_top + 148:
+            if log_y < chat_top + 106:
                 self._text(text, self.font_tiny, col, sx + 5, log_y)
-                log_y += 22
+                log_y += 20
 
-        # input box
-        input_y = chat_top + 158
+        input_y = chat_top + 116
         border_col = C_ACCENT if self.chat_focused else C_GRAY
         pygame.draw.rect(self.screen, (18, 22, 38),
-            (sx, input_y, panel_w - 10, 30), border_radius=6)
+            (sx, input_y, panel_w - 10, 28), border_radius=6)
         pygame.draw.rect(self.screen, border_col,
-            (sx, input_y, panel_w - 10, 30), 2, border_radius=6)
+            (sx, input_y, panel_w - 10, 28), 2, border_radius=6)
         cursor  = "|" if self.chat_focused else ""
         display = self.chat_input if self.chat_input else "click to chat..."
         tcol    = C_WHITE if self.chat_input else C_GRAY
-        self._text(f"{display}{cursor}", self.font_tiny, tcol, sx + 5, input_y + 7)
+        self._text(f"{display}{cursor}", self.font_tiny, tcol, sx + 5, input_y + 6)
 
     # ─────────────────────────────────────
     # Result screen
