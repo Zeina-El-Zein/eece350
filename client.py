@@ -22,6 +22,7 @@ WIN_H     = GRID_H * CELL_SIZE + 60
 FPS       = 60
 SCREEN_SETTINGS = "settings"
 
+
 C_BG      = (8,   10,  18)
 C_GRID1   = (18,  22,  35)
 C_GRID2   = (12,  16,  26)
@@ -82,6 +83,7 @@ DIRECTION_VECTORS = {
 
 class PithonClient:
     def __init__(self):
+        #initialize pygame and create the game window
         pygame.init()
         pygame.display.set_caption("Πthon Arena")
         self.screen = pygame.display.set_mode((WIN_W, WIN_H), pygame.RESIZABLE)
@@ -165,10 +167,11 @@ class PithonClient:
         self.spectator_result_time = 0
         self.is_spectator = False
     # ─────────────────────────────────────
-    # Networking
+    # Networking FUNCTIONS
     # ─────────────────────────────────────
 
     def connect(self):
+        #try to create a socket and connect to the server
         try:
             self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.sock.connect((self.input_host, int(self.input_port)))
@@ -179,6 +182,7 @@ class PithonClient:
             self.sock = None
 
     def _send(self, msg):
+        #dont do anything if the socket is not connected
         if not self.sock:
             return
         try:
@@ -200,14 +204,14 @@ class PithonClient:
         except OSError:
             pass
 
-    def _process_buf(self):
-        while len(self._buf) >= 4:
+    def _process_buf(self):  
+        while len(self._buf) >= 4:  #first 4 bytes contain the message length
             length = struct.unpack("!I", self._buf[:4])[0]
             if len(self._buf) < 4 + length:
                 break
-            raw      = self._buf[4:4 + length]
+            raw  = self._buf[4:4 + length]    #extract the JSON message from the buffer
             self._buf = self._buf[4 + length:]
-            msg      = json.loads(raw.decode("utf-8"))
+            msg      = json.loads(raw.decode("utf-8"))    #convert the JSON message back to a Python dictionary
             self._handle_msg(msg)
 
     def _handle_msg(self, msg):
@@ -229,10 +233,10 @@ class PithonClient:
             self.sock = None
 
         elif t == "LOBBY":
-            self.player_list = msg.get("players", [])
+            self.player_list = msg.get("players", [])  #update the list of players shown in the lobby
 
         elif t == "CHALLENGE_IN":
-            self.pending_challenge = msg.get("from", "?")
+            self.pending_challenge = msg.get("from", "?") #store the name of the player who challenged us
 
         elif t == "GAME_START":
             self.game_info        = msg
@@ -483,7 +487,7 @@ class PithonClient:
                     if ch.isalnum() or ch == "_":
                         self.input_uname += ch            
 
-    def _draw_connect(self):
+    def _draw_connect(self):  #draw the connection screen where the user enters ip port and username
         W, H = self.screen.get_size()
         cx   = W // 2
         cy   = H // 2
@@ -523,7 +527,7 @@ class PithonClient:
     # Setup screen
     # ─────────────────────────────────────
 
-    def _ev_setup(self, ev):
+    def _ev_setup(self, ev):  #for color choice and movement
         W, H = self.screen.get_size()
         cx   = W // 2
 
