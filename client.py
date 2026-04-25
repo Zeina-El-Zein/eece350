@@ -1142,7 +1142,6 @@ class PithonClient:
         right_items = [
             ("Rock    -20 HP",   (160, 160, 160)),
             ("Spike   -30 HP",   (220, 70, 70)),
-            ("Body    -15 HP",   C_GRAY),
             ("Opp.  -50 HP",     C_RED),
             ("Opp.  -100 w/Rare",C_PURPLE),
             ("",                 C_GRAY),
@@ -1352,7 +1351,6 @@ class PithonClient:
                 ("^ Spike   -30 HP",  (220, 100, 100)),
                 ("", C_GRAY),
                 ("COLLISIONS", (200, 200, 255)),
-                ("Own body  -15 HP",  C_GRAY),
                 ("Opponent  -50 HP",       C_RED),
                 ("Opp. -100 w/Rare box",   C_PURPLE),
             ]
@@ -1605,7 +1603,6 @@ class PithonClient:
             " ^ Spike -30HP",
             "",
             "Collisions:",
-            " Own body -15HP",
             " Opp.     -50HP",
             " Opp+Rare-100HP",
             "",
