@@ -6,7 +6,7 @@ GRID_W = 48
 GRID_H = 34   
 GAME_DURATION = 300  # seconds
 INITIAL_HEALTH = 200
-TICK_INTERVAL = 1 / 4  # 4 ticks per second
+TICK_INTERVAL = 1 / 5  # 5 ticks per second
 
 # Pie types: (health_delta)
 PIE_TYPES = {
@@ -23,6 +23,7 @@ BOX_TYPES = {
 }
 
 NUM_BOXES = 3
+NUM_PIES = 12
 DOUBLE_DAMAGE_DURATION = 30.0  # seconds
 
 # Obstacle types: (damage)
@@ -129,7 +130,7 @@ class GameEngine:
             self.obstacles[cell] = random.choice(list(OBSTACLE_TYPES.keys()))
 
     def _generate_pies(self):
-        while len(self.pies) < 8:
+        while len(self.pies) < NUM_PIES:
             cell = self._free_cell()
             self.pies[cell] = random.choice(list(PIE_TYPES.keys()))
     def _generate_boxes(self):
@@ -170,7 +171,7 @@ class GameEngine:
 
         # respawn pies if any were collected
         self._generate_pies()
-
+        self._generate_boxes()
     # ─────────────────────────────────────────
     # Collisions
     # ─────────────────────────────────────────
@@ -193,9 +194,7 @@ class GameEngine:
             obs_type = self.obstacles[snake.head]
             snake.health += OBSTACLE_TYPES[obs_type]
 
-        # own body collision
-        if snake.head in snake.body[1:]:
-            snake.health -= 15
+        
 
         # other snake body collision
         if snake.head in other.body:
