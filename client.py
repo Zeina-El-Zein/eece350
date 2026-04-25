@@ -133,6 +133,7 @@ class PithonClient:
         self.settings_key_focus = None   # which direction is waiting for keypress
         
         # Lobby
+        
         self.player_list       = []
         self.selected_index    = 0
         self.lobby_msg         = ""
@@ -149,6 +150,7 @@ class PithonClient:
         self.countdown_start  = 0
         self.COUNTDOWN_SECS   = 10
         self.game_info  = {}
+        self.my_player_id = None
         self.notifications     = []    # list of (text, ttl)
         self.double_damage_active = False
         self.double_damage_until  = 0.0
@@ -244,17 +246,19 @@ class PithonClient:
             c2 = msg.get("color2", [80, 140, 255])
             self.player1_color = tuple(c1)
             self.player2_color = tuple(c2)
-            
+
             if p1 == self.username:
-                self.my_player_id = 1
-                self.is_spectator = False
+                self.my_player_id  = 1
+                self.is_spectator  = False
+                self.player1_color = self.snake_color  # override with MY actual color
             elif p2 == self.username:
-                self.my_player_id = 2                
-                self.is_spectator = False
+                self.my_player_id  = 2
+                self.is_spectator  = False
+                self.player2_color = self.snake_color  # override with MY actual color
             else:
                 self.my_player_id = None
                 self.is_spectator = True
-            # tell server our color
+
             self._send({
                 "type": "PLAYER_COLOR",
                 "color": list(self.snake_color)
@@ -747,10 +751,11 @@ class PithonClient:
                 self.selected_index = min(len(others) - 1, self.selected_index + 1)
             elif ev.key == pygame.K_RETURN and others:
                 target = others[self.selected_index]
-                self._send({"type": "CHALLENGE", "target": target})
+                self._send({"type": "CHALLENGE", "target": target, "color": list(self.snake_color)})
                 self.lobby_msg = f"Challenge sent to {target}..."
+
             elif ev.key == pygame.K_y and self.pending_challenge:
-                self._send({"type": "CHALLENGE_RESP", "accepted": True})
+                self._send({"type": "CHALLENGE_RESP", "accepted": True, "color": list(self.snake_color)})
                 self.pending_challenge = None
             elif ev.key == pygame.K_n and self.pending_challenge:
                 self._send({"type": "CHALLENGE_RESP", "accepted": False})
