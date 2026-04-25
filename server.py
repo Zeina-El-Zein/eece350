@@ -1,9 +1,9 @@
 import socket
 import threading
 import time
+import sys
 from protocol import send_message, receive_message
-from game_engine import GameEngine, TICK_INTERVAL
-
+from game_engine import GameEngine, TICK_INTERVAL, GRID_W, GRID_H, GAME_DURATION
 HOST = "0.0.0.0"
 PORT = 5000
 
@@ -127,9 +127,9 @@ def start_game(socket1, socket2, username1, username2):
         "player2": username2,
         "color1":  player_colors.get(username1, [60, 200, 120]),
         "color2":  player_colors.get(username2, [80, 140, 255]),
-        "grid_w":  40,
-        "grid_h":  30,
-        "duration": 120,
+        "grid_w":  GRID_W,
+        "grid_h":  GRID_H,
+        "duration": GAME_DURATION,
     }
     send_message(socket1, game_start_msg)
     send_message(socket2, game_start_msg)
@@ -421,4 +421,9 @@ def start_server():
 
 
 if __name__ == "__main__":
+    if len(sys.argv) > 1:
+        try:
+            PORT = int(sys.argv[1])
+        except ValueError:
+            print("Invalid port number. Using default port 5000.")
     start_server()
