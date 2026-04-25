@@ -1,4 +1,3 @@
-
 import json
 import struct
 
@@ -43,4 +42,3 @@ def receive_message(sock):
         return None
 
     return json.loads(raw_message.decode("utf-8"))
-
